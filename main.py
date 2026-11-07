@@ -3,6 +3,7 @@ from discord.ext import commands
 import aiohttp
 import os
 import json
+import io
 from flask import Flask
 from threading import Thread
 
@@ -22,7 +23,7 @@ def keep_alive():
 
 # ==================== BOT AYARLARI ====================
 TOKEN = os.getenv("TOKEN")
-ALLOWED_GUILD_ID = 1564299296097050855 # Sadece bu sunucuda calisacak
+ALLOWED_GUILD_ID = 1564299296097050855 
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -33,8 +34,9 @@ API_BASE_1 = "https://wazely.vercel.app/api"
 API_BASE_2 = "https://wazelyapi.vercel.app/api"
 ID_API = "https://prox0959.netlify.app/api/search?id="
 
-# LOGO URL
-LOGO_URL = "https://images-ext-1.discordapp.net/external/agYlzG6UyMpfrhR9NA4z8NZcqb89E4cpR7SH2JolLlA/https/cdn.discordapp.com/icons/1564299296097050855/550f4dd8fb04c6e7377b3ecac363689a.webp?format=webp"
+# RESİM VE REKLAM
+IMAGE_URL = "https://cdn.discordapp.com/attachments/1566040841150140477/1568589689072517201/image0.jpg?ex=6af05e7c&is=6aef0cfc&hm=2ba98ebe9a1b762f154d732a13a478165a8d0fae0929392899608834df3d033c&"
+FOOTER_TEXT = "discord.gg/yenilgi"
 
 # ==================== FİLTRE (TEMİZLEYİCİ) ====================
 def temizle(data):
@@ -58,7 +60,6 @@ class SorguModal(discord.ui.Modal):
         self.add_item(self.sorgu)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Sunucu kontrolü
         if interaction.guild is None or interaction.guild.id != ALLOWED_GUILD_ID:
             await interaction.response.send_message("❌ Bu bot sadece özel sunucuda çalışır.", ephemeral=True)
             return
@@ -70,7 +71,7 @@ class SorguModal(discord.ui.Modal):
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(target_url, timeout=15) as resp:
+                async with session.get(target_url, timeout=20) as resp:
                     if resp.status != 200:
                         await interaction.followup.send(f"❌ Sorgu Hatası: HTTP {resp.status}", ephemeral=True)
                         return
@@ -87,16 +88,33 @@ class SorguModal(discord.ui.Modal):
             temiz_data = temizle(data)
             sonuc_str = json.dumps(temiz_data, indent=2, ensure_ascii=False) if isinstance(temiz_data, dict) else str(temiz_data)
 
+            # === DOSYA İLE GÖNDERME MANTIĞI ===
             if len(sonuc_str) > 1900:
-                sonuc_str = sonuc_str[:1900] + "\n... (Devamı kırpıldı)"
+                dosya = discord.File(io.BytesIO(sonuc_str.encode('utf-8')), filename=f"{self.title.replace(' ', '_').lower()}_log.txt")
+                
+                embed = discord.Embed(
+                    title=f"✅ Sorgu Sonucu: {self.title}",
+                    description="Log çok büyük olduğu için dosya olarak gönderildi.",
+                    color=0x00E676
+                )
+                embed.set_image(url=IMAGE_URL)
+                embed.set_footer(text=FOOTER_TEXT)
+                
+                try:
+                    await interaction.user.send(embed=embed, file=dosya)
+                    await interaction.followup.send("✅ Sonuç büyük olduğu için dosya olarak DM'nize gönderildi!", ephemeral=True)
+                except discord.Forbidden:
+                    await interaction.followup.send("❌ Size DM gönderemiyorum. Lütfen DM kutunuzu açın.", ephemeral=True)
+                return
 
+            # Normal boyuttaysa embed olarak gönder
             embed = discord.Embed(
                 title=f"✅ Sorgu Sonucu: {self.title}",
                 description=f"```json\n{sonuc_str}\n```",
                 color=0x00E676
             )
-            embed.set_thumbnail(url=LOGO_URL)
-            embed.set_footer(text="discord.gg/bergmu")
+            embed.set_image(url=IMAGE_URL)
+            embed.set_footer(text=FOOTER_TEXT)
 
             try:
                 await interaction.user.send(embed=embed)
@@ -113,7 +131,6 @@ class BosSorguModal(discord.ui.Modal):
         self.api_url = api_url
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Sunucu kontrolü
         if interaction.guild is None or interaction.guild.id != ALLOWED_GUILD_ID:
             await interaction.response.send_message("❌ Bu bot sadece özel sunucuda çalışır.", ephemeral=True)
             return
@@ -122,7 +139,7 @@ class BosSorguModal(discord.ui.Modal):
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(self.api_url, timeout=15) as resp:
+                async with session.get(self.api_url, timeout=20) as resp:
                     if resp.status != 200:
                         await interaction.followup.send(f"❌ Sorgu Hatası: HTTP {resp.status}", ephemeral=True)
                         return
@@ -139,15 +156,30 @@ class BosSorguModal(discord.ui.Modal):
             sonuc_str = json.dumps(temiz_data, indent=2, ensure_ascii=False) if isinstance(temiz_data, dict) else str(temiz_data)
 
             if len(sonuc_str) > 1900:
-                sonuc_str = sonuc_str[:1900] + "\n... (Devamı kırpıldı)"
+                dosya = discord.File(io.BytesIO(sonuc_str.encode('utf-8')), filename=f"{self.title.replace(' ', '_').lower()}_log.txt")
+                
+                embed = discord.Embed(
+                    title=f"✅ Sorgu Sonucu: {self.title}",
+                    description="Log çok büyük olduğu için dosya olarak gönderildi.",
+                    color=0x00E676
+                )
+                embed.set_image(url=IMAGE_URL)
+                embed.set_footer(text=FOOTER_TEXT)
+                
+                try:
+                    await interaction.user.send(embed=embed, file=dosya)
+                    await interaction.followup.send("✅ Sonuç büyük olduğu için dosya olarak DM'nize gönderildi!", ephemeral=True)
+                except discord.Forbidden:
+                    await interaction.followup.send("❌ Size DM gönderemiyorum. Lütfen DM kutunuzu açın.", ephemeral=True)
+                return
 
             embed = discord.Embed(
                 title=f"✅ Sorgu Sonucu: {self.title}",
                 description=f"```json\n{sonuc_str}\n```",
                 color=0x00E676
             )
-            embed.set_thumbnail(url=LOGO_URL)
-            embed.set_footer(text="discord.gg/bergmu")
+            embed.set_image(url=IMAGE_URL)
+            embed.set_footer(text=FOOTER_TEXT)
 
             try:
                 await interaction.user.send(embed=embed)
@@ -182,7 +214,6 @@ class SorguSecim(discord.ui.Select):
         super().__init__(placeholder="Bir sorgu sistemi seçin...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        # Sunucu kontrolü
         if interaction.guild is None or interaction.guild.id != ALLOWED_GUILD_ID:
             await interaction.response.send_message("❌ Bu bot sadece özel sunucuda çalışır.", ephemeral=True)
             return
@@ -232,25 +263,24 @@ class GenelSorguView(discord.ui.View):
 @bot.event
 async def on_ready():
     print(f"✅ Bot hazır: {bot.user}")
-    await bot.change_presence(activity=discord.Game(name="!logçek | discord.gg/bergmu"))
+    await bot.change_presence(activity=discord.Game(name=f"!menü | {FOOTER_TEXT}"))
 
-@bot.command(name="logçek", aliases=["logcek", "log"])
-async def logcek(ctx):
-    # DM KORUMASI
+# SADECE !MENÜ KOMUTU
+@bot.command(name="menü", aliases=["menu"])
+async def menu(ctx):
     if ctx.guild is None:
-        return # DM'den yazılırsa hiçbir şey yapma (sessizce yoksay)
+        return 
     
-    # SUNUCU KORUMASI
     if ctx.guild.id != ALLOWED_GUILD_ID:
-        return # Yanlış sunucudaysa hiçbir şey yapma
+        return 
 
     embed = discord.Embed(
-        title="🕵️‍♂️ BergMu Sorgu Paneli",
+        title="🕵️‍♂️ Yenilgi Sorgu Paneli",
         description="Aşağıdaki menüden yapmak istediğiniz sorguyu seçin.\nSonuçlar **özel mesaj (DM)** olarak gönderilecektir.",
         color=0x5865F2
     )
-    embed.set_thumbnail(url=LOGO_URL)
-    embed.set_footer(text="discord.gg/bergmu")
+    embed.set_image(url=IMAGE_URL)
+    embed.set_footer(text=FOOTER_TEXT)
     
     await ctx.send(embed=embed, view=GenelSorguView())
 
