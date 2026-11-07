@@ -6,6 +6,7 @@ import json
 import io
 import random
 import requests
+import asyncio  # HATA BURADAYDI, EKLENDİ
 from flask import Flask
 from threading import Thread
 
@@ -190,7 +191,7 @@ class DCDataModal(discord.ui.Modal):
         super().__init__(title="DC Data Çek")
         self.adet = discord.ui.TextInput(
             label="Kaç adet veri çekilsin? (1-100)",
-            placeholder="Örn: 50",
+            placeholder="Örn: 100",
             required=True,
             max_length=3
         )
@@ -235,38 +236,42 @@ class DCDataModal(discord.ui.Modal):
         # Rastgele seç
         secilenler = random.sample(all_lines, min(adet, len(all_lines)))
 
+        # ==================== DOSYA OLARAK GÖNDERME ====================
+        # Gelen verileri tek bir metin haline getir
+        dosya_icerigi = "\n".join(secilenler)
+        
+        # Discord dosyası oluştur
+        dosya = discord.File(io.BytesIO(dosya_icerigi.encode('utf-8')), filename="data.txt")
+
+        # Embed tasarımı
+        embed = discord.Embed(
+            title="📁 Günlük New Data",
+            description="Çıtır fırından yeni çıkmış! 🥐\nİstediğiniz veriler `data.txt` dosyasında ekte sunulmuştur.",
+            color=0x5865F2
+        )
+        embed.set_image(url=IMAGE_URL)
+        embed.set_footer(text=FOOTER_TEXT)
+
         # DM'e gönder
         try:
-            for line in secilenler:
-                embed = discord.Embed(
-                    title="📁 Yenilgi Data",
-                    description=f"```yaml\n{line}\n```",
-                    color=0x5865F2
-                )
-                embed.set_image(url=IMAGE_URL)
-                embed.set_footer(text=FOOTER_TEXT)
-                await interaction.user.send(embed=embed)
-                await asyncio.sleep(0.7)
+            await interaction.user.send(embed=embed, file=dosya)
+            await interaction.followup.send(
+                f"✅ **{len(secilenler)} adet** veri `data.txt` dosyası olarak DM kutuna gönderildi.",
+                ephemeral=True
+            )
         except discord.Forbidden:
             await interaction.followup.send(
                 "❌ DM kutun kapalı olduğu için mesaj gönderemedim. Lütfen DM'lerini aç.",
                 ephemeral=True
             )
-            return
         except Exception as e:
             await interaction.followup.send(f"❌ DM gönderirken hata oluştu: `{e}`", ephemeral=True)
-            return
-
-        await interaction.followup.send(
-            f"✅ **{len(secilenler)} adet** veri DM kutuna gönderildi.",
-            ephemeral=True
-        )
 
 # ==================== MENÜ SEÇENEKLERİ ====================
 class SorguSecim(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="DC Data Çek", description="tfLink'ten veri çekip DM'e gönderir", value="dcdata"),
+            discord.SelectOption(label="DC Data Çek", description="tfLink'ten veri çekip txt olarak DM'e gönderir", value="dcdata"),
             discord.SelectOption(label="ID Sorgu (Mail/Veri)", description="Discord ID üzerinden veri sızdırır", value="idsorgu"),
             discord.SelectOption(label="Log Çekme", description="Site loglarını çeker (Örn: sahibinden)", value="log"),
             discord.SelectOption(label="Eczane Sorgu", description="Eczane adından bilgi çeker", value="eczane"),
