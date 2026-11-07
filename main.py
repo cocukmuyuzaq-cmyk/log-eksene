@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import aiohttp
 import os
+import json
 from flask import Flask
 from threading import Thread
 
@@ -20,19 +21,28 @@ def keep_alive():
     t.start()
 
 # ==================== BOT AYARLARI ====================
-TOKEN = os.getenv("TOKEN") # Render Environment'tan çeker
+TOKEN = os.getenv("TOKEN") 
 
-# Bot Ayarları
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# API ADRESLERİ (Wazely isimleri gizlendi)
+# API ADRESLERİ
 API_BASE_1 = "https://wazely.vercel.app/api"
 API_BASE_2 = "https://wazelyapi.vercel.app/api"
+ID_API = "https://prox0959.netlify.app/api/search?id="
 
-# LOGO URL'Sİ
+# LOGO URL
 LOGO_URL = "https://images-ext-1.discordapp.net/external/agYlzG6UyMpfrhR9NA4z8NZcqb89E4cpR7SH2JolLlA/https/cdn.discordapp.com/icons/1564299296097050855/550f4dd8fb04c6e7377b3ecac363689a.webp?format=webp"
+
+# ==================== FİLTRE (TEMİZLEYİCİ) ====================
+def temizle(data):
+    # JSON içindeki "dev", "author" gibi reklam etiketlerini siler
+    if isinstance(data, dict):
+        return {k: temizle(v) for k, v in data.items() if k.lower() not in ['dev', 'author', 'provider', 'credit']}
+    elif isinstance(data, list):
+        return [temizle(i) for i in data]
+    return data
 
 # ==================== MODAL (GİRİŞ FORMLARI) ====================
 class SorguModal(discord.ui.Modal):
@@ -69,7 +79,10 @@ class SorguModal(discord.ui.Modal):
                 await interaction.followup.send("⚠️ Sonuç bulunamadı.", ephemeral=True)
                 return
 
-            sonuc_str = str(data)
+            # Veriyi temizle
+            temiz_data = temizle(data)
+            sonuc_str = json.dumps(temiz_data, indent=2, ensure_ascii=False) if isinstance(temiz_data, dict) else str(temiz_data)
+
             if len(sonuc_str) > 1900:
                 sonuc_str = sonuc_str[:1900] + "\n... (Devamı kırpıldı)"
 
@@ -78,7 +91,6 @@ class SorguModal(discord.ui.Modal):
                 description=f"```json\n{sonuc_str}\n```",
                 color=0x00E676
             )
-            # LOGO EKLENDİ
             embed.set_thumbnail(url=LOGO_URL)
             embed.set_footer(text="discord.gg/bergmu")
 
@@ -114,7 +126,10 @@ class BosSorguModal(discord.ui.Modal):
                 await interaction.followup.send("⚠️ Sonuç bulunamadı.", ephemeral=True)
                 return
 
-            sonuc_str = str(data)
+            # Veriyi temizle
+            temiz_data = temizle(data)
+            sonuc_str = json.dumps(temiz_data, indent=2, ensure_ascii=False) if isinstance(temiz_data, dict) else str(temiz_data)
+
             if len(sonuc_str) > 1900:
                 sonuc_str = sonuc_str[:1900] + "\n... (Devamı kırpıldı)"
 
@@ -123,7 +138,6 @@ class BosSorguModal(discord.ui.Modal):
                 description=f"```json\n{sonuc_str}\n```",
                 color=0x00E676
             )
-            # LOGO EKLENDİ
             embed.set_thumbnail(url=LOGO_URL)
             embed.set_footer(text="discord.gg/bergmu")
 
@@ -140,6 +154,7 @@ class BosSorguModal(discord.ui.Modal):
 class SorguSecim(discord.ui.Select):
     def __init__(self):
         options = [
+            discord.SelectOption(label="ID Sorgu (Mail/Veri)", description="Discord ID üzerinden veri sızdırır", value="idsorgu"),
             discord.SelectOption(label="Log Çekme", description="Site loglarını çeker (Örn: sahibinden)", value="log"),
             discord.SelectOption(label="Eczane Sorgu", description="Eczane adından bilgi çeker", value="eczane"),
             discord.SelectOption(label="IP Bilgi", description="IP adresinin konumunu bulur", value="ipinfo"),
@@ -161,7 +176,9 @@ class SorguSecim(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         secim = self.values[0]
 
-        if secim == "log":
+        if secim == "idsorgu":
+            await interaction.response.send_modal(SorguModal("ID Sorgu", "Discord ID (Örn: 92433932011724800)", ID_API))
+        elif secim == "log":
             await interaction.response.send_modal(SorguModal("Log Çekme", "Site adı (Örn: sahibinden)", f"{API_BASE_1}/trlog?site="))
         elif secim == "eczane":
             await interaction.response.send_modal(SorguModal("Eczane Sorgu", "Eczane Adı (Örn: Murat Eczanesi)", f"{API_BASE_1}/eczane?ad="))
@@ -209,11 +226,10 @@ async def on_ready():
 @bot.command(name="logçek", aliases=["logcek", "log"])
 async def logcek(ctx):
     embed = discord.Embed(
-        title="🕵️‍♂️ Genel Sorgu Paneli",
+        title="🕵️‍♂️ BergMu Sorgu Paneli",
         description="Aşağıdaki menüden yapmak istediğiniz sorguyu seçin.\nSonuçlar **özel mesaj (DM)** olarak gönderilecektir.",
         color=0x5865F2
     )
-    # PANELİN KENDİSİNE DE LOGO EKLENDİ
     embed.set_thumbnail(url=LOGO_URL)
     embed.set_footer(text="discord.gg/bergmu")
     
@@ -224,5 +240,5 @@ if __name__ == "__main__":
     if not TOKEN:
         print("❌ HATA: TOKEN bulunamadı! Render'da Environment Variables kısmına TOKEN eklediğinden emin ol.")
     else:
-        keep_alive() # Web sunucusunu başlat
+        keep_alive() 
         bot.run(TOKEN)
