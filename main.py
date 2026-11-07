@@ -21,7 +21,8 @@ def keep_alive():
     t.start()
 
 # ==================== BOT AYARLARI ====================
-TOKEN = os.getenv("TOKEN") 
+TOKEN = os.getenv("TOKEN")
+ALLOWED_GUILD_ID = 1564299296097050855 # Sadece bu sunucuda calisacak
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -37,7 +38,6 @@ LOGO_URL = "https://images-ext-1.discordapp.net/external/agYlzG6UyMpfrhR9NA4z8NZ
 
 # ==================== FİLTRE (TEMİZLEYİCİ) ====================
 def temizle(data):
-    # JSON içindeki "dev", "author" gibi reklam etiketlerini siler
     if isinstance(data, dict):
         return {k: temizle(v) for k, v in data.items() if k.lower() not in ['dev', 'author', 'provider', 'credit']}
     elif isinstance(data, list):
@@ -58,6 +58,11 @@ class SorguModal(discord.ui.Modal):
         self.add_item(self.sorgu)
 
     async def on_submit(self, interaction: discord.Interaction):
+        # Sunucu kontrolü
+        if interaction.guild is None or interaction.guild.id != ALLOWED_GUILD_ID:
+            await interaction.response.send_message("❌ Bu bot sadece özel sunucuda çalışır.", ephemeral=True)
+            return
+
         await interaction.response.defer(ephemeral=True)
         
         deger = self.sorgu.value
@@ -79,7 +84,6 @@ class SorguModal(discord.ui.Modal):
                 await interaction.followup.send("⚠️ Sonuç bulunamadı.", ephemeral=True)
                 return
 
-            # Veriyi temizle
             temiz_data = temizle(data)
             sonuc_str = json.dumps(temiz_data, indent=2, ensure_ascii=False) if isinstance(temiz_data, dict) else str(temiz_data)
 
@@ -109,6 +113,11 @@ class BosSorguModal(discord.ui.Modal):
         self.api_url = api_url
 
     async def on_submit(self, interaction: discord.Interaction):
+        # Sunucu kontrolü
+        if interaction.guild is None or interaction.guild.id != ALLOWED_GUILD_ID:
+            await interaction.response.send_message("❌ Bu bot sadece özel sunucuda çalışır.", ephemeral=True)
+            return
+
         await interaction.response.defer(ephemeral=True)
         
         try:
@@ -126,7 +135,6 @@ class BosSorguModal(discord.ui.Modal):
                 await interaction.followup.send("⚠️ Sonuç bulunamadı.", ephemeral=True)
                 return
 
-            # Veriyi temizle
             temiz_data = temizle(data)
             sonuc_str = json.dumps(temiz_data, indent=2, ensure_ascii=False) if isinstance(temiz_data, dict) else str(temiz_data)
 
@@ -174,6 +182,11 @@ class SorguSecim(discord.ui.Select):
         super().__init__(placeholder="Bir sorgu sistemi seçin...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
+        # Sunucu kontrolü
+        if interaction.guild is None or interaction.guild.id != ALLOWED_GUILD_ID:
+            await interaction.response.send_message("❌ Bu bot sadece özel sunucuda çalışır.", ephemeral=True)
+            return
+
         secim = self.values[0]
 
         if secim == "idsorgu":
@@ -200,8 +213,6 @@ class SorguSecim(discord.ui.Select):
             await interaction.response.send_modal(SorguModal("Discord Token Check", "Bot Tokeni", f"{API_BASE_2}/dcbottokencheck?token="))
         elif secim == "tgtoken":
             await interaction.response.send_modal(SorguModal("Telegram Token Check", "Bot Tokeni", f"{API_BASE_2}/tgtokencheck?token="))
-        
-        # Değer girmeye gerek olmayanlar (direkt API)
         elif secim == "exxen":
             await interaction.response.send_modal(BosSorguModal("Exxen Hesap", f"{API_BASE_1}/exxengen"))
         elif secim == "predunyam":
@@ -225,6 +236,14 @@ async def on_ready():
 
 @bot.command(name="logçek", aliases=["logcek", "log"])
 async def logcek(ctx):
+    # DM KORUMASI
+    if ctx.guild is None:
+        return # DM'den yazılırsa hiçbir şey yapma (sessizce yoksay)
+    
+    # SUNUCU KORUMASI
+    if ctx.guild.id != ALLOWED_GUILD_ID:
+        return # Yanlış sunucudaysa hiçbir şey yapma
+
     embed = discord.Embed(
         title="🕵️‍♂️ BergMu Sorgu Paneli",
         description="Aşağıdaki menüden yapmak istediğiniz sorguyu seçin.\nSonuçlar **özel mesaj (DM)** olarak gönderilecektir.",
@@ -238,7 +257,7 @@ async def logcek(ctx):
 # ==================== ÇALIŞTIR ====================
 if __name__ == "__main__":
     if not TOKEN:
-        print("❌ HATA: TOKEN bulunamadı! Render'da Environment Variables kısmına TOKEN eklediğinden emin ol.")
+        print("❌ HATA: TOKEN bulunamadı!")
     else:
         keep_alive() 
         bot.run(TOKEN)
